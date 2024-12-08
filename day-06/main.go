@@ -91,7 +91,10 @@ func (g *Guard) move(guardMap GuardMap, trackVisited bool) bool {
 }
 
 func main() {
-	guardMap, initPos := parseInput("input.txt")
+	guardMap, initPos, err := parseInput("input.txt")
+	if err != nil {
+		panic(err)
+	}
 
 	p1 := partOne(guardMap, initPos)
 	p2 := partTwo(guardMap, initPos)
@@ -141,10 +144,10 @@ func checkLoop(guardMap GuardMap, initPos Coordinate) bool {
 	return false
 }
 
-func parseInput(input string) (GuardMap, Coordinate) {
+func parseInput(input string) (GuardMap, Coordinate, error) {
 	content, err := os.ReadFile(input)
 	if err != nil {
-		log.Fatal(err)
+		return nil, Coordinate{}, err
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
@@ -167,5 +170,5 @@ func parseInput(input string) (GuardMap, Coordinate) {
 		}
 	}
 
-	return grid, init
+	return grid, init, nil
 }
