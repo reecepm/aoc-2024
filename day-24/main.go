@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -30,48 +31,15 @@ func NewCircuit() *Circuit {
 
 func (c *Circuit) addGate(gateType, input1, input2, output string) {
 	c.gates = append(c.gates, &Gate{
-		gateType:  gateType,
-		input1:    input1,
-		input2:    input2,
-		output:    output,
-		evaluated: false,
+		gateType: gateType,
+		input1:   input1,
+		input2:   input2,
+		output:   output,
 	})
 }
 
 func (c *Circuit) setWireValue(wire string, value int) {
 	c.wireValues[wire] = value
-}
-
-func (c *Circuit) getInputNumber(prefix string) int {
-	num := 0
-	for wire, val := range c.wireValues {
-		if strings.HasPrefix(wire, prefix) {
-			pos := 0
-			fmt.Sscanf(wire[1:], "%d", &pos)
-			if val > 0 {
-				num |= 1 << pos
-			}
-		}
-	}
-	return num
-}
-
-func (c *Circuit) copy() *Circuit {
-	newCircuit := NewCircuit()
-	for wire, value := range c.wireValues {
-		newCircuit.wireValues[wire] = value
-	}
-	for _, gate := range c.gates {
-		newGate := &Gate{
-			gateType:  gate.gateType,
-			input1:    gate.input1,
-			input2:    gate.input2,
-			output:    gate.output,
-			evaluated: false,
-		}
-		newCircuit.gates = append(newCircuit.gates, newGate)
-	}
-	return newCircuit
 }
 
 func (c *Circuit) evaluate() {
@@ -141,6 +109,72 @@ func (c *Circuit) getResult() int {
 	return result
 }
 
+func (c *Circuit) findBrokenConnections() string {
+	inputMap := c.buildInputMap()
+	broken := make(map[string]bool)
+
+	for _, gate := range c.gates {
+		switch gate.gateType {
+		case "AND":
+			if !c.isFirstAND(gate) && !inputMap[makeKey(gate.output, "OR")] {
+				broken[gate.output] = true
+			}
+		case "OR":
+			if c.isOutputWire(gate.output) && gate.output != "z45" {
+				broken[gate.output] = true
+			}
+		case "XOR":
+			if c.isFirstLevel(gate) {
+				if !c.isFirstXOR(gate) && !inputMap[makeKey(gate.output, "XOR")] {
+					broken[gate.output] = true
+				}
+			} else if !c.isOutputWire(gate.output) {
+				broken[gate.output] = true
+			}
+		}
+	}
+
+	return c.formatResult(broken)
+}
+
+func (c *Circuit) buildInputMap() map[string]bool {
+	m := make(map[string]bool)
+	for _, g := range c.gates {
+		m[makeKey(g.input1, g.gateType)] = true
+		m[makeKey(g.input2, g.gateType)] = true
+	}
+	return m
+}
+
+func (c *Circuit) isFirstAND(g *Gate) bool {
+	return g.input1 == "x00" || g.input2 == "x00"
+}
+
+func (c *Circuit) isFirstXOR(g *Gate) bool {
+	return g.input1 == "x00" || g.input2 == "x00"
+}
+
+func (c *Circuit) isFirstLevel(g *Gate) bool {
+	return strings.HasPrefix(g.input1, "x") || strings.HasPrefix(g.input2, "x")
+}
+
+func (c *Circuit) isOutputWire(wire string) bool {
+	return strings.HasPrefix(wire, "z")
+}
+
+func (c *Circuit) formatResult(broken map[string]bool) string {
+	var wires []string
+	for wire := range broken {
+		wires = append(wires, wire)
+	}
+	sort.Strings(wires)
+	return strings.Join(wires, ",")
+}
+
+func makeKey(wire, gateType string) string {
+	return fmt.Sprintf("%s,%s", wire, gateType)
+}
+
 func main() {
 	circuit, err := parseInput("input.txt")
 	if err != nil {
@@ -148,12 +182,19 @@ func main() {
 	}
 
 	p1 := partOne(circuit)
+	p2 := partTwo(circuit)
+
 	log.Printf("part1: %d", p1)
+	log.Printf("part2: %s", p2)
 }
 
-func partOne(circuit *Circuit) int {
-	circuit.evaluate()
-	return circuit.getResult()
+func partOne(c *Circuit) int {
+	c.evaluate()
+	return c.getResult()
+}
+
+func partTwo(c *Circuit) string {
+	return c.findBrokenConnections()
 }
 
 func parseInput(path string) (*Circuit, error) {
